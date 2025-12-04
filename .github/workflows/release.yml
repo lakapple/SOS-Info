@@ -36,9 +36,6 @@ jobs:
       - name: Build APK (split per ABI – smaller files)
         run: flutter build apk --release --split-per-abi
 
-      - name: Build App Bundle (for Google Play)
-        run: flutter build appbundle --release
-
       - name: Generate Changelog
         run: |
           # Get the previous tag (or fallback to initial commit if none)
