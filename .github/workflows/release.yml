@@ -1,0 +1,77 @@
+name: Build and Release Flutter App
+
+on:
+  push:
+    tags:
+      - "v*.*.*"          # Triggers only on tags like v1.0.0, v2.3.4, etc.
+
+permissions:
+  contents: write       # Needed to create release and upload assets
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0               # Important! We need full history for changelog
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build APK (split per ABI – smaller files)
+        run: flutter build apk --release --split-per-abi
+
+      - name: Build App Bundle (for Google Play)
+        run: flutter build appbundle --release
+
+      - name: Generate Changelog
+        run: |
+          # Get the previous tag (or fallback to initial commit if none)
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 @^ 2>/dev/null || echo "")
+          
+          echo "## What's Changed" > changelog.txt
+          echo "" >> changelog.txt
+          
+          if [ -z "$PREVIOUS_TAG" ]; then
+            echo "Initial release" >> changelog.txt
+          else
+            git log ${PREVIOUS_TAG}..HEAD --pretty=format:"%h %s" --no-merges \
+              | sed -e "s/^/• /" >> changelog.txt
+            echo "" >> changelog.txt
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREVIOUS_TAG}...${{ github.ref_name }}" >> changelog.txt
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          body_path: changelog.txt
+          draft: false
+          prerelease: false
+          files: |
+            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+            build/app/outputs/flutter-apk/app-x86_64-release.apk
+
+      - name: Upload artifacts (optional backup)
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-release-binaries
+          path: |
+            build/app/outputs/**/*.apk
