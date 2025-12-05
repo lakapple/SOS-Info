@@ -48,13 +48,14 @@ class SosCard extends StatelessWidget {
                    _buildInfoRow(Icons.phone, "Phones", info.phoneNumbers.join(", "), Colors.blue),
                    const Divider(),
                    _buildInfoRow(Icons.category, "Type", info.requestType.vietnameseName, Colors.purple),
-                   const Divider(),
+                   const Divider(), 
+                   _buildInfoRow(Icons.group, "People", "${info.peopleCount}", Colors.orange),
+                   const SizedBox(height: 15),
                    _buildInfoRow(Icons.location_on, "Address", info.address, Colors.red),
                    const Divider(),
                    _buildInfoRow(Icons.summarize, "Help Content", info.content, Colors.black87),
                    const Divider(),
-                   _buildInfoRow(Icons.group, "People", "${info.peopleCount}", Colors.orange),
-                   const SizedBox(height: 15),
+
                 ],
 
                 // RAW MESSAGE (ALWAYS VISIBLE)
@@ -64,7 +65,7 @@ class SosCard extends StatelessWidget {
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    // color: Colors.white,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.black12),
                   ),
