@@ -29,9 +29,7 @@ class SmsTab extends StatelessWidget {
           ]),
         ),
         body: TabBarView(children: [
-          // SOS List
           _buildList(sosList, true),
-          // Other List
           _buildList(otherList, false),
         ]),
       ),
@@ -46,22 +44,22 @@ class SmsTab extends StatelessWidget {
       itemBuilder: (context, index) {
         final item = messages[index];
         if (isSosTab) {
-          return SosCard(
-            message: item, 
-            onManualSend: onManualSend, 
-            onMove: (m) => onMove(m, false) // Move to Other
-          );
+          return SosCard(message: item, onManualSend: onManualSend, onMove: (m) => onMove(m, false));
         } else {
-          // Simple card for Other messages
+          // Other Card (Expandable, Raw Text visible)
           return Card(
+            color: Colors.white,
             child: ExpansionTile(
+              shape: const Border(),
               leading: const Icon(Icons.message, color: Colors.grey),
               title: Text(item.originalMessage.address ?? "Unknown"),
-              subtitle: Text(item.originalMessage.body ?? "", maxLines: 1),
+              subtitle: Text(item.originalMessage.body ?? "", maxLines: 1, overflow: TextOverflow.ellipsis),
               children: [
                 Padding(
                   padding: const EdgeInsets.all(16), 
-                  child: Column(children: [
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text("Full Message:", style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 5),
                     Text(item.originalMessage.body ?? ""),
                     Align(
                       alignment: Alignment.centerRight,

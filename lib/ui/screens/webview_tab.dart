@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../../core/constants.dart';
+import '../../data/local/prefs_helper.dart';
 
 class WebViewTab extends StatefulWidget {
   const WebViewTab({super.key});
@@ -19,7 +20,13 @@ class _WebViewTabState extends State<WebViewTab> {
     controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..loadRequest(Uri.parse(AppConstants.webViewUrl));
-    _timer = Timer.periodic(const Duration(seconds: 30), (t) => controller.reload());
+    _startAutoRefresh();
+  }
+
+  void _startAutoRefresh() async {
+    int interval = await PrefsHelper.getRefreshInterval();
+    _timer?.cancel();
+    _timer = Timer.periodic(Duration(seconds: interval), (t) => controller.reload());
   }
 
   @override

@@ -3,7 +3,6 @@ import '../../data/local/prefs_helper.dart';
 
 class ConfigTab extends StatefulWidget {
   const ConfigTab({super.key});
-
   @override
   State<ConfigTab> createState() => _ConfigTabState();
 }
@@ -11,6 +10,7 @@ class ConfigTab extends StatefulWidget {
 class _ConfigTabState extends State<ConfigTab> {
   bool _autoSend = false;
   final TextEditingController _apiKeyController = TextEditingController();
+  int _refreshInterval = 30;
   bool _isLoading = true;
 
   @override
@@ -22,24 +22,14 @@ class _ConfigTabState extends State<ConfigTab> {
   Future<void> _loadSettings() async {
     final autoSend = await PrefsHelper.getAutoSend();
     final apiKey = await PrefsHelper.getApiKey();
+    final interval = await PrefsHelper.getRefreshInterval();
     
-    if (mounted) {
-      setState(() {
-        _autoSend = autoSend;
-        _apiKeyController.text = apiKey;
-        _isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _saveAutoSend(bool value) async {
-    await PrefsHelper.setAutoSend(value);
-    setState(() => _autoSend = value);
-  }
-
-  Future<void> _saveApiKey(String value) async {
-    await PrefsHelper.setApiKey(value);
-    // Note: No setState needed for text field as controller handles it
+    if (mounted) setState(() {
+      _autoSend = autoSend;
+      _apiKeyController.text = apiKey;
+      _refreshInterval = interval;
+      _isLoading = false;
+    });
   }
 
   @override
@@ -47,72 +37,59 @@ class _ConfigTabState extends State<ConfigTab> {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Settings"),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text("Settings"), centerTitle: true),
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
-          _buildSectionHeader("Automation"),
+          const Text("Automation", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
           Card(
             child: SwitchListTile(
               title: const Text("Auto-Send SOS"),
-              subtitle: const Text("Automatically send SOS requests to the server after AI analysis."),
+              subtitle: const Text("Send requests to server after AI analysis."),
               value: _autoSend,
               activeColor: Colors.red,
-              onChanged: _saveAutoSend,
+              onChanged: (val) async {
+                await PrefsHelper.setAutoSend(val);
+                setState(() => _autoSend = val);
+              },
             ),
           ),
-          
           const SizedBox(height: 20),
-          _buildSectionHeader("AI Configuration"),
+          const Text("Display", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
           Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("Gemini API Key", style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _apiKeyController,
-                    decoration: const InputDecoration(
-                      hintText: "Paste your Google Gemini API Key here",
-                      border: OutlineInputBorder(),
-                      suffixIcon: Icon(Icons.key),
-                      helperText: "Required for AI analysis",
-                    ),
-                    obscureText: true, // Hide key for security
-                    onChanged: _saveApiKey,
-                  ),
+            child: ListTile(
+              title: const Text("WebView Auto-Refresh"),
+              trailing: DropdownButton<int>(
+                value: _refreshInterval,
+                underline: Container(),
+                items: const [
+                  DropdownMenuItem(value: 10, child: Text("10 Seconds")),
+                  DropdownMenuItem(value: 30, child: Text("30 Seconds")),
+                  DropdownMenuItem(value: 60, child: Text("60 Seconds")),
                 ],
+                onChanged: (val) async {
+                  if (val != null) {
+                    await PrefsHelper.setRefreshInterval(val);
+                    setState(() => _refreshInterval = val);
+                  }
+                },
               ),
             ),
           ),
-          
           const SizedBox(height: 20),
-          const Center(
-            child: Text(
-              "Version 1.0.0",
-              style: TextStyle(color: Colors.grey),
+          const Text("AI Configuration", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: TextField(
+                controller: _apiKeyController,
+                decoration: const InputDecoration(labelText: "Gemini API Key", border: OutlineInputBorder()),
+                obscureText: true,
+                onChanged: (val) => PrefsHelper.setApiKey(val),
+              ),
             ),
-          )
+          ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0, left: 4),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: 14, 
-          fontWeight: FontWeight.bold, 
-          color: Theme.of(context).colorScheme.primary
-        ),
       ),
     );
   }

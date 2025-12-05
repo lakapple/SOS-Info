@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter/material.dart'; // For DebugPrint
 import '../../core/constants.dart';
 import '../../core/utils.dart';
 import '../models/extracted_info.dart';
@@ -25,15 +26,19 @@ class RescueApiService {
         "timestamp": DateTime.now().toIso8601String(),
       };
 
+      debugPrint("🚀 Sending API: ${jsonEncode(bodyMap)}");
+
       final response = await http.post(
         Uri.parse(AppConstants.rescueApiUrl),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode(bodyMap),
       );
 
+      debugPrint("Response: ${response.statusCode}");
       return response.statusCode >= 200 && response.statusCode < 300;
     } catch (e) {
-      throw Exception("API Connection Error: $e");
+      debugPrint("API Error: $e");
+      return false;
     }
   }
 }

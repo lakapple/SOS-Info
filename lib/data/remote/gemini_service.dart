@@ -10,7 +10,6 @@ class GeminiService {
   static Future<ExtractedInfo> extractData(String smsBody, String senderPhone) async {
     try {
       String apiKey = await PrefsHelper.getApiKey();
-      
       if (apiKey.isEmpty) {
         return ExtractedInfo(content: "Error: No API Key in Settings", isAnalyzed: false);
       }
@@ -21,21 +20,18 @@ class GeminiService {
         generationConfig: GenerationConfig(responseMimeType: "application/json", temperature: 0.1),
       );
 
-      // --- UPDATED PROMPT ---
       final prompt = Content.text('''
-        Bạn là hệ thống AI cứu hộ khẩn cấp. 
-        Input: Sender: $senderPhone, Message: "$smsBody".
+        Bạn là hệ thống AI cứu hộ. Input: Sender: $senderPhone, Message: "$smsBody".
 
-        Nhiệm vụ: Trích xuất thông tin cứu hộ.
-        
+        Nhiệm vụ: Trích xuất thông tin.
         Yêu cầu Output JSON:
-        1. "phone_numbers": Danh sách các số điện thoại liên hệ tìm thấy.
-        2. "content": Trích xuất NỘI DUNG CẦN GIÚP ĐỠ cụ thể (ví dụ: "cần đồ ăn, nước sạch", "nhà bị ngập, có người già"). Bỏ qua các từ chào hỏi như "alo", "sos", "làm ơn". Không tóm tắt chung chung, hãy lấy chi tiết quan trọng.
-        3. "people_count": Số lượng người (Int). Nếu không có, mặc định 1.
-        4. "address": Địa chỉ cụ thể nhất.
+        1. "phone_numbers": Danh sách số điện thoại tìm thấy.
+        2. "content": Trích xuất NỘI DUNG CẦN GIÚP ĐỠ cụ thể (ví dụ: "cần đồ ăn, nước sạch", "nhà sập"). Bỏ qua lời chào.
+        3. "people_count": Số lượng người (Int).
+        4. "address": Địa chỉ.
         5. "request_type": Phân loại (URGENT_HOSPITAL, SAFE_PLACE, SUPPLIES, MEDICAL, CLOTHES, CUSTOM).
         
-        Trả về JSON duy nhất: { "phone_numbers": [], "content": "", "people_count": 1, "address": "", "request_type": "CUSTOM" }
+        JSON duy nhất: { "phone_numbers": [], "content": "", "people_count": 1, "address": "", "request_type": "CUSTOM" }
       ''');
 
       final response = await model.generateContent([prompt]);

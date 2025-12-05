@@ -4,17 +4,17 @@ import 'package:telephony/telephony.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:geolocator/geolocator.dart';
 
-// Imports
 import 'core/constants.dart';
 import 'data/local/db_helper.dart';
-import 'data/local/prefs_helper.dart'; // Import Prefs
+import 'data/local/prefs_helper.dart';
 import 'data/remote/gemini_service.dart';
 import 'data/remote/rescue_api_service.dart';
 import 'data/models/rescue_message.dart';
 import 'data/models/extracted_info.dart';
+import 'data/models/request_type.dart';
 import 'ui/screens/sms_tab.dart';
 import 'ui/screens/webview_tab.dart';
-import 'ui/screens/config_tab.dart'; // Import Config Tab
+import 'ui/screens/config_tab.dart';
 
 void main() {
   runApp(const MaterialApp(
@@ -46,13 +46,13 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadMessages();
     telephony.listenIncomingSms(
       onNewMessage: (SmsMessage message) { _loadMessages(); },
-      onBackgroundMessage: backgroundHandler 
+      onBackgroundMessage: backgroundHandler
     );
   }
 
   static void backgroundHandler(SmsMessage message) {}
 
-  // --- LOGIC: PROCESS QUEUE ---
+  // --- QUEUE ---
   void _addToAnalysisQueue(RescueMessage msg) {
     if (!msg.isSos || msg.info.isAnalyzed || msg.isAnalyzing) return;
     if (!_processingQueue.contains(msg)) {
@@ -69,7 +69,6 @@ class _HomeScreenState extends State<HomeScreen> {
       final msg = _processingQueue.first;
       if (mounted) setState(() => msg.isAnalyzing = true);
 
-      // Call Service (Now uses Key from Prefs)
       final result = await GeminiService.extractData(
         msg.originalMessage.body ?? "", 
         msg.originalMessage.address ?? "Unknown"
@@ -80,7 +79,6 @@ class _HomeScreenState extends State<HomeScreen> {
         continue;
       }
 
-      // Save to DB
       if (result.isAnalyzed) {
          await DatabaseHelper.instance.cacheAnalysis(
            msg.originalMessage.address ?? "Unknown", 
@@ -89,18 +87,13 @@ class _HomeScreenState extends State<HomeScreen> {
          );
       }
 
-      // Update Local State
-      if (mounted) setState(() { msg.info = result; msg.isAnalyzing = false; });
       _processingQueue.removeAt(0);
+      if (mounted) setState(() { msg.info = result; msg.isAnalyzing = false; });
 
-      // -------------------------------------------------------------
-      // AUTO SEND LOGIC
-      // -------------------------------------------------------------
-      // Check if Auto Send is ON and we haven't sent this message yet
+      // Auto Send Check
       bool autoSendEnabled = await PrefsHelper.getAutoSend();
       if (autoSendEnabled && result.isAnalyzed && !msg.apiSent) {
-        debugPrint("🤖 Auto-sending message...");
-        await _performSend(msg); // Send immediately
+        await _performSend(msg);
       }
 
       await Future.delayed(const Duration(seconds: 5));
@@ -108,7 +101,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _isProcessorRunning = false;
   }
 
-  // --- LOGIC: LOAD MESSAGES ---
+  // --- LOAD ---
   Future<void> _loadMessages() async {
     if (!mounted) return;
     setState(() => isLoading = true);
@@ -142,11 +135,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     if (mounted) {
-      setState(() {
-        sosMessages = tempSos;
-        otherMessages = tempOther;
-        isLoading = false;
-      });
+      setState(() { sosMessages = tempSos; otherMessages = tempOther; isLoading = false; });
       for (var msg in sosMessages) {
         if (!msg.info.isAnalyzed) _addToAnalysisQueue(msg);
       }
@@ -167,41 +156,89 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // --- REFACTORED SEND LOGIC (Used by both Manual and Auto) ---
+  // --- SENDING ---
   Future<void> _performSend(RescueMessage msg) async {
     Position? pos;
     try { pos = await Geolocator.getCurrentPosition(); } catch (_) {}
-
-    try {
-      bool success = await RescueApiService.sendRequest(msg.info, pos);
-      if (success) {
-        if(mounted) setState(() => msg.apiSent = true);
-        if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ Sent!")));
-      } else {
-        if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("⚠️ Failed to send")));
-      }
-    } catch (e) {
-      debugPrint("Send Error: $e");
+    
+    bool success = await RescueApiService.sendRequest(msg.info, pos);
+    if (success) {
+      if(mounted) setState(() => msg.apiSent = true);
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ Sent!")));
+    } else {
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("⚠️ Failed to send")));
     }
   }
 
   Future<void> _handleManualSend(RescueMessage msg) async {
-    bool confirm = await showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Confirm Send"),
-        content: const Text("Send this SOS request to the Rescue Map?"),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Confirm")),
-        ],
-      ),
-    ) ?? false;
+    // 1. Show Edit Dialog
+    ExtractedInfo? editedInfo = await _showEditDialog(context, msg);
+    if (editedInfo == null) return; 
 
-    if (!confirm) return;
+    // 2. Update Local State
+    setState(() => msg.info = editedInfo);
     
-    if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Sending...")));
+    // 3. Send
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Sending...")));
     await _performSend(msg);
+  }
+
+  Future<ExtractedInfo?> _showEditDialog(BuildContext context, RescueMessage msg) async {
+    final info = msg.info;
+    TextEditingController phoneCtrl = TextEditingController(text: info.phoneNumbers.join(", "));
+    TextEditingController peopleCtrl = TextEditingController(text: info.peopleCount.toString());
+    TextEditingController addressCtrl = TextEditingController(text: info.address);
+    TextEditingController contentCtrl = TextEditingController(text: info.content);
+    RequestType selectedType = info.requestType;
+
+    return showDialog<ExtractedInfo>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text("Confirm & Edit"),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                     TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: "Phones (comma sep)")),
+                     DropdownButtonFormField<RequestType>(
+                        value: selectedType,
+                        decoration: const InputDecoration(labelText: "Type"),
+                        isExpanded: true,
+                        items: RequestType.values.map((type) => DropdownMenuItem(value: type, child: Text(type.vietnameseName))).toList(),
+                        onChanged: (val) { if(val != null) setDialogState(() => selectedType = val); },
+                     ),
+                     TextField(controller: peopleCtrl, decoration: const InputDecoration(labelText: "People Count"), keyboardType: TextInputType.number),
+                     TextField(controller: addressCtrl, decoration: const InputDecoration(labelText: "Address"), maxLines: 2),
+                     TextField(controller: contentCtrl, decoration: const InputDecoration(labelText: "Help Content"), maxLines: 3),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx, null), child: const Text("Cancel")),
+                FilledButton(
+                  onPressed: () {
+                    final newInfo = ExtractedInfo(
+                      phoneNumbers: phoneCtrl.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
+                      content: contentCtrl.text,
+                      peopleCount: int.tryParse(peopleCtrl.text) ?? 1,
+                      address: addressCtrl.text,
+                      requestType: selectedType,
+                      isAnalyzed: true,
+                    );
+                    Navigator.pop(ctx, newInfo);
+                  }, 
+                  child: const Text("SEND NOW")
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -211,14 +248,8 @@ class _HomeScreenState extends State<HomeScreen> {
         index: _currentIndex,
         children: [
           const WebViewTab(),
-          SmsTab(
-            sosList: sosMessages, 
-            otherList: otherMessages, 
-            isLoading: isLoading, 
-            onMove: _moveMessage, 
-            onManualSend: _handleManualSend
-          ),
-          const ConfigTab(), // NEW TAB
+          SmsTab(sosList: sosMessages, otherList: otherMessages, isLoading: isLoading, onMove: _moveMessage, onManualSend: _handleManualSend),
+          const ConfigTab(),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -227,7 +258,7 @@ class _HomeScreenState extends State<HomeScreen> {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.public), label: "Map"),
           NavigationDestination(icon: Icon(Icons.mark_chat_unread), label: "Inbox"),
-          NavigationDestination(icon: Icon(Icons.settings), label: "Config"), // NEW ICON
+          NavigationDestination(icon: Icon(Icons.settings), label: "Config"),
         ],
       ),
     );
