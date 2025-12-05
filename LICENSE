@@ -1,3 +1,18 @@
+Nexuron Custom License — AGPLv3 with Additional Restrictions
+Project: SOS.INFO.VN
+Copyright (c) 2025 Nexuron
+
+This software is licensed under the GNU Affero General Public License version 3
+(“AGPLv3”), with the full text reproduced below. ALL TERMS OF THE AGPLv3 APPLY
+EXCEPT WHERE MODIFIED BY THE ADDITIONAL RESTRICTIONS AT THE END OF THIS
+DOCUMENT. If you do not agree to ALL terms, you must not use, copy, modify, or
+deploy this software.
+
+=======================================================================
+GNU AFFERO GENERAL PUBLIC LICENSE
+Version 3, 19 November 2007
+=======================================================================
+
                     GNU AFFERO GENERAL PUBLIC LICENSE
                        Version 3, 19 November 2007
 
@@ -633,8 +648,8 @@ the "copyright" line and a pointer to where the full notice is found.
     Copyright (C) <year>  <name of author>
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU Affero General Public License as published
-    by the Free Software Foundation, either version 3 of the License, or
+    it under the terms of the GNU Affero General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
     This program is distributed in the hope that it will be useful,
@@ -659,3 +674,34 @@ specific requirements.
 if any, to sign a "copyright disclaimer" for the program, if necessary.
 For more information on this, and how to apply and follow the GNU AGPL, see
 <https://www.gnu.org/licenses/>.
+
+=======================================================================
+ADDITIONAL RESTRICTIONS IMPOSED BY NEXURON
+=======================================================================
+
+1. Non-Commercial Use Only
+You are prohibited from using this software or any derivative work for any
+Commercial Use. “Commercial Use” includes any activity intended for commercial
+advantage or monetary compensation. A separate commercial license from Nexuron
+is required for any such use.
+
+1. Mandatory Homepage Attribution
+Any public deployment of this software or derivative works must display the
+following attribution on the homepage, visibly and without user interaction:
+
+    Powered by SOS.INFO.VN — Original Author: Nexuron
+    https://sos.info.vn
+
+If no homepage exists, attribution must appear in an About or Credits section
+accessible to all users.
+
+3. Copyleft Continuity of Restrictions
+All derivative works must retain all Additional Restrictions in full.
+
+4. Termination
+Any breach of these Additional Restrictions terminates all rights granted by
+both the base AGPLv3 and this custom extension.
+
+=======================================================================
+END OF LICENSE
+=======================================================================
