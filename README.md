@@ -46,7 +46,7 @@ cd SOS-Info
 flutter pub get
 ```
 
-### 4. Chạy ứng dụng
+### 3. Chạy ứng dụng
 Kết nối thiết bị Android và chạy:
 ```bash
 flutter run
