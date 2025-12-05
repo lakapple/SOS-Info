@@ -1,68 +1,54 @@
 import 'package:flutter/material.dart';
-import '../../data/local/prefs_helper.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../data/providers/settings_provider.dart';
+import '../../data/providers/rescue_provider.dart';
 
-class ConfigTab extends StatefulWidget {
-  // Callback to trigger Main Screen logic (AI Analysis)
-  final VoidCallback onConfigSaved; 
-
-  const ConfigTab({super.key, required this.onConfigSaved});
+class ConfigTab extends ConsumerStatefulWidget {
+  const ConfigTab({super.key});
 
   @override
-  State<ConfigTab> createState() => _ConfigTabState();
+  ConsumerState<ConfigTab> createState() => _ConfigTabState();
 }
 
-class _ConfigTabState extends State<ConfigTab> {
-  // Local state for UI
-  bool _autoSend = false;
+class _ConfigTabState extends ConsumerState<ConfigTab> {
   final TextEditingController _apiKeyController = TextEditingController();
-  int _refreshInterval = 30;
-  bool _isLoading = true;
-
+  
   @override
   void initState() {
     super.initState();
-    _loadSettings();
+    // Pre-fill controller with current state
+    final settings = ref.read(settingsProvider);
+    _apiKeyController.text = settings.apiKey;
   }
 
-  Future<void> _loadSettings() async {
-    final autoSend = await PrefsHelper.getAutoSend();
-    final apiKey = await PrefsHelper.getApiKey();
-    final interval = await PrefsHelper.getRefreshInterval();
-    
-    if (mounted) {
-      setState(() {
-        _autoSend = autoSend;
-        _apiKeyController.text = apiKey;
-        _refreshInterval = interval;
-        _isLoading = false;
-      });
-    }
-  }
-
-  // --- SAVE ACTION ---
   Future<void> _handleSave() async {
-    // 1. Save all settings to Preferences
-    await PrefsHelper.setAutoSend(_autoSend);
-    await PrefsHelper.setApiKey(_apiKeyController.text.trim());
-    await PrefsHelper.setRefreshInterval(_refreshInterval);
+    // Save all via Provider
+    final notifier = ref.read(settingsProvider.notifier);
+    await notifier.updateApiKey(_apiKeyController.text.trim());
+    // Auto-send and interval are already updated via their specific widgets below (onChanged)
+    // But for API key in text field, we explicitly save here.
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("✅ Configuration Saved & Applied!"),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
-        ),
+        const SnackBar(content: Text("✅ Configuration Saved!"), backgroundColor: Colors.green),
       );
     }
 
-    // 2. Trigger the callback to Main Screen (Start AI)
-    widget.onConfigSaved();
+    // Trigger AI Logic in Rescue Provider
+    final count = ref.read(rescueProvider.notifier).triggerPendingAnalysis();
+    if (count > 0 && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Queueing $count messages...")),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) return const Center(child: CircularProgressIndicator());
+    // Watch settings state
+    final settings = ref.watch(settingsProvider);
+
+    if (settings.isLoading) return const Center(child: CircularProgressIndicator());
 
     return Scaffold(
       appBar: AppBar(title: const Text("Settings"), centerTitle: true),
@@ -71,15 +57,14 @@ class _ConfigTabState extends State<ConfigTab> {
         children: [
           _buildSectionHeader("Automation"),
           Card(
-            // Fix: Use ListTile + trailing Switch so only the switch is clickable
             child: ListTile(
               title: const Text("Auto-Send SOS"),
               subtitle: const Text("Automatically send requests after AI analysis."),
               trailing: Switch(
-                value: _autoSend,
+                value: settings.autoSend,
                 activeColor: Colors.red,
                 onChanged: (val) {
-                  setState(() => _autoSend = val);
+                  ref.read(settingsProvider.notifier).updateAutoSend(val);
                 },
               ),
             ),
@@ -93,7 +78,7 @@ class _ConfigTabState extends State<ConfigTab> {
               subtitle: const Text("Interval for reloading the rescue map."),
               leading: const Icon(Icons.timer),
               trailing: DropdownButton<int>(
-                value: _refreshInterval,
+                value: settings.refreshInterval,
                 underline: Container(),
                 items: const [
                   DropdownMenuItem(value: 10, child: Text("10s")),
@@ -101,7 +86,9 @@ class _ConfigTabState extends State<ConfigTab> {
                   DropdownMenuItem(value: 60, child: Text("60s")),
                 ],
                 onChanged: (val) {
-                  if (val != null) setState(() => _refreshInterval = val);
+                  if (val != null) {
+                    ref.read(settingsProvider.notifier).updateRefreshInterval(val);
+                  }
                 },
               ),
             ),
@@ -119,7 +106,6 @@ class _ConfigTabState extends State<ConfigTab> {
                   const SizedBox(height: 8),
                   TextField(
                     controller: _apiKeyController,
-                    // ALWAYS ENABLED NOW
                     decoration: const InputDecoration(
                       hintText: "Paste API Key here",
                       border: OutlineInputBorder(),
@@ -133,18 +119,13 @@ class _ConfigTabState extends State<ConfigTab> {
           ),
 
           const SizedBox(height: 30),
-          
-          // --- GLOBAL SAVE BUTTON ---
           SizedBox(
             width: double.infinity,
             height: 50,
             child: FilledButton.icon(
               onPressed: _handleSave,
               icon: const Icon(Icons.save),
-              label: const Text("SAVE & APPLY CONFIGURATION", style: TextStyle(fontWeight: FontWeight.bold)),
-              style: FilledButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.primary,
-              ),
+              label: const Text("SAVE & APPLY", style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ),
         ],
