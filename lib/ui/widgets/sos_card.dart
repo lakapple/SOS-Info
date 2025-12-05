@@ -7,7 +7,12 @@ class SosCard extends StatelessWidget {
   final Function(RescueMessage) onManualSend;
   final Function(RescueMessage) onMove;
 
-  const SosCard({super.key, required this.message, required this.onManualSend, required this.onMove});
+  const SosCard({
+    super.key, 
+    required this.message, 
+    required this.onManualSend, 
+    required this.onMove
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -18,20 +23,26 @@ class SosCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       color: Theme.of(context).colorScheme.errorContainer,
       child: ExpansionTile(
-        shape: const Border(), // FIX: No Black Lines
+        shape: const Border(),
         collapsedShape: const Border(),
         
         leading: message.isAnalyzing 
             ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
             : const Icon(Icons.priority_high, color: Colors.red),
+            
         title: Text(
-          info.phoneNumbers.isNotEmpty ? info.phoneNumbers.first : (message.originalMessage.address ?? "Unknown"), 
+          info.phoneNumbers.isNotEmpty ? info.phoneNumbers.first : message.sender, 
           style: const TextStyle(fontWeight: FontWeight.bold)
         ),
+        
+        // --- UPDATED SUBTITLE: RAW MESSAGE ONLY ---
         subtitle: Text(
-          !info.isAnalyzed ? "Analyzing..." : info.content, 
-          maxLines: 1, overflow: TextOverflow.ellipsis
+          message.originalMessage.body ?? "", 
+          maxLines: 2, 
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(color: Colors.black.withOpacity(0.7)),
         ),
+        
         children: [
           Padding(
             padding: const EdgeInsets.all(16.0),
@@ -45,20 +56,21 @@ class SosCard extends StatelessWidget {
                    const Text("AI is analyzing...", style: TextStyle(color: Colors.grey)),
                    const SizedBox(height: 10),
                 ] else ...[
+                   // --- REORDERED FIELDS ---
                    _buildInfoRow(Icons.phone, "Phones", info.phoneNumbers.join(", "), Colors.blue),
                    const Divider(),
                    _buildInfoRow(Icons.category, "Type", info.requestType.vietnameseName, Colors.purple),
-                   const Divider(), 
+                   const Divider(),
+                   // People Moved Here
                    _buildInfoRow(Icons.group, "People", "${info.peopleCount}", Colors.orange),
-                   const SizedBox(height: 15),
+                   const Divider(),
                    _buildInfoRow(Icons.location_on, "Address", info.address, Colors.red),
                    const Divider(),
                    _buildInfoRow(Icons.summarize, "Help Content", info.content, Colors.black87),
-                   const Divider(),
-
+                   const SizedBox(height: 15),
                 ],
 
-                // RAW MESSAGE (ALWAYS VISIBLE)
+                // --- RENAMED LABEL: Full Message ---
                 const Text("Full Message:", style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 4),
                 Container(
@@ -67,7 +79,7 @@ class SosCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(8),
-                    // border: Border.all(color: Colors.black12),
+                    border: Border.all(color: Colors.black12),
                   ),
                   child: Text(
                     message.originalMessage.body ?? "", 
@@ -77,7 +89,7 @@ class SosCard extends StatelessWidget {
                 
                 const SizedBox(height: 15),
                 
-                // BUTTONS (ALWAYS VISIBLE)
+                // BUTTONS
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
@@ -88,7 +100,10 @@ class SosCard extends StatelessWidget {
                       style: FilledButton.styleFrom(backgroundColor: message.apiSent ? Colors.green : Colors.red),
                     ),
                     const SizedBox(width: 8),
-                    TextButton(onPressed: () => onMove(message), child: const Text("Not SOS")),
+                    TextButton(
+                      onPressed: () => onMove(message), 
+                      child: const Text("Not SOS")
+                    ),
                   ],
                 )
               ],
@@ -105,7 +120,11 @@ class SosCard extends StatelessWidget {
       const SizedBox(width: 12),
       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-        Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+        // Handle empty strings nicely
+        Text(
+          value.isEmpty ? "-" : value, 
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)
+        ),
       ]))
     ]);
   }

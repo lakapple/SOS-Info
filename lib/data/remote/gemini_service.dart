@@ -10,8 +10,15 @@ class GeminiService {
   static Future<ExtractedInfo> extractData(String smsBody, String senderPhone) async {
     try {
       String apiKey = await PrefsHelper.getApiKey();
+      
+      // FIX: Return blank content/address if no key, but keep sender phone
       if (apiKey.isEmpty) {
-        return ExtractedInfo(content: "Error: No API Key in Settings", isAnalyzed: false);
+        return ExtractedInfo(
+          phoneNumbers: [senderPhone], 
+          content: "", 
+          address: "", 
+          isAnalyzed: false
+        );
       }
 
       final model = GenerativeModel(
@@ -21,17 +28,18 @@ class GeminiService {
       );
 
       final prompt = Content.text('''
-        Bạn là hệ thống AI cứu hộ. Input: Sender: $senderPhone, Message: "$smsBody".
+        Bạn là hệ thống AI cứu hộ khẩn cấp. 
+        Input: Sender: $senderPhone, Message: "$smsBody".
 
-        Nhiệm vụ: Trích xuất thông tin.
+        Nhiệm vụ: Trích xuất thông tin cứu hộ.
         Yêu cầu Output JSON:
-        1. "phone_numbers": Danh sách số điện thoại tìm thấy.
-        2. "content": Trích xuất NỘI DUNG CẦN GIÚP ĐỠ cụ thể (ví dụ: "cần đồ ăn, nước sạch", "nhà sập"). Bỏ qua lời chào.
+        1. "phone_numbers": Danh sách số điện thoại liên hệ.
+        2. "content": Trích xuất NỘI DUNG CẦN GIÚP ĐỠ cụ thể.
         3. "people_count": Số lượng người (Int).
-        4. "address": Địa chỉ.
+        4. "address": Địa chỉ cụ thể.
         5. "request_type": Phân loại (URGENT_HOSPITAL, SAFE_PLACE, SUPPLIES, MEDICAL, CLOTHES, CUSTOM).
         
-        JSON duy nhất: { "phone_numbers": [], "content": "", "people_count": 1, "address": "", "request_type": "CUSTOM" }
+        Trả về JSON duy nhất: { "phone_numbers": [], "content": "", "people_count": 1, "address": "", "request_type": "CUSTOM" }
       ''');
 
       final response = await model.generateContent([prompt]);
@@ -39,7 +47,9 @@ class GeminiService {
       rawText = rawText.replaceAll(RegExp(r'^```json'), '').replaceAll(RegExp(r'```$'), '').trim();
 
       dynamic decodedJSON;
-      try { decodedJSON = jsonDecode(rawText); } catch (e) { return ExtractedInfo(content: "AI Error"); }
+      try { decodedJSON = jsonDecode(rawText); } catch (e) { 
+        return ExtractedInfo(phoneNumbers: [senderPhone], content: "", address: "", isAnalyzed: false); 
+      }
 
       Map<String, dynamic> data = (decodedJSON is List && decodedJSON.isNotEmpty) ? decodedJSON.first : decodedJSON;
 
@@ -53,17 +63,21 @@ class GeminiService {
 
       return ExtractedInfo(
         phoneNumbers: List<String>.from(data['phone_numbers'] ?? [senderPhone]),
-        content: data['content'] ?? smsBody,
+        content: data['content'] ?? "",
         peopleCount: pCount,
-        address: data['address'] ?? "Unknown",
+        address: data['address'] ?? "",
         requestType: type,
         isAnalyzed: true,
       );
     } catch (e) {
       bool isRateLimit = e.toString().contains("429") || e.toString().contains("Resource exhausted");
+      
+      // FIX: Return blank defaults on error, but keep sender phone
       return ExtractedInfo(
         phoneNumbers: [senderPhone],
-        content: isRateLimit ? "Server busy. Retrying..." : "Analysis Failed",
+        content: isRateLimit ? "Server busy..." : "", // Only show text if rate limited
+        address: "",
+        isAnalyzed: false,
         needsRetry: isRateLimit,
       );
     }

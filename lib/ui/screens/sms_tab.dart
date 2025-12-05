@@ -46,13 +46,14 @@ class SmsTab extends StatelessWidget {
         if (isSosTab) {
           return SosCard(message: item, onManualSend: onManualSend, onMove: (m) => onMove(m, false));
         } else {
-          // Other Card (Expandable, Raw Text visible)
+          // --- OTHER SMS TAB ---
           return Card(
             color: Colors.white,
             child: ExpansionTile(
               shape: const Border(),
               leading: const Icon(Icons.message, color: Colors.grey),
-              title: Text(item.originalMessage.address ?? "Unknown"),
+              // USE item.sender HERE (It is now 0xxxx)
+              title: Text(item.sender, style: const TextStyle(fontWeight: FontWeight.bold)),
               subtitle: Text(item.originalMessage.body ?? "", maxLines: 1, overflow: TextOverflow.ellipsis),
               children: [
                 Padding(

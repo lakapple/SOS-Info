@@ -3,7 +3,7 @@ import 'request_type.dart';
 
 class ExtractedInfo {
   List<String> phoneNumbers;
-  String content;
+  String content; 
   int peopleCount;
   String address;
   RequestType requestType;
@@ -12,9 +12,9 @@ class ExtractedInfo {
 
   ExtractedInfo({
     this.phoneNumbers = const [],
-    this.content = "...",
+    this.content = "", // DEFAULT BLANK
     this.peopleCount = 0,
-    this.address = "...",
+    this.address = "", // DEFAULT BLANK
     this.requestType = RequestType.CUSTOM,
     this.isAnalyzed = false,
     this.needsRetry = false,
@@ -39,9 +39,9 @@ class ExtractedInfo {
 
     return ExtractedInfo(
       phoneNumbers: List<String>.from(jsonDecode(map['phoneNumbers'])),
-      content: map['content'],
-      peopleCount: map['peopleCount'],
-      address: map['address'],
+      content: map['content'] ?? "",
+      peopleCount: map['peopleCount'] ?? 0,
+      address: map['address'] ?? "",
       requestType: type,
       isAnalyzed: map['isAnalyzed'] == 1,
       needsRetry: false,
