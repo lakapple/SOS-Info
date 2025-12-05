@@ -35,7 +35,7 @@ class _HomeScreenState extends State<HomeScreen> {
   
   List<RescueMessage> sosMessages = [];
   List<RescueMessage> otherMessages = [];
-  bool isLoading = true;
+  bool isLoading = true; // Start true
 
   List<RescueMessage> _processingQueue = [];
   bool _isProcessorRunning = false;
@@ -43,16 +43,123 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _loadMessages();
-    telephony.listenIncomingSms(
-      onNewMessage: (SmsMessage message) { _loadMessages(); },
-      onBackgroundMessage: backgroundHandler
-    );
+    // Use addPostFrameCallback to ensure context is ready for Dialogs/Permissions
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initialSetup();
+    });
   }
 
   static void backgroundHandler(SmsMessage message) {}
 
-  // --- QUEUE ---
+  // --- 1. ROBUST INITIALIZATION ---
+  Future<void> _initialSetup() async {
+    setState(() => isLoading = true);
+
+    // Request Permissions Sequentially
+    Map<Permission, PermissionStatus> statuses = await [
+      Permission.sms,
+      Permission.location,
+    ].request();
+
+    if (statuses[Permission.sms] != PermissionStatus.granted) {
+      if (mounted) {
+        setState(() => isLoading = false);
+        _showPermissionError();
+      }
+      return;
+    }
+
+    // Permissions OK -> Init Listener & Load Data
+    _initSmsListener();
+    await _loadMessages();
+  }
+
+  void _showPermissionError() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("SMS Permission Required. Please enable in Settings."),
+        backgroundColor: Colors.red,
+        duration: Duration(seconds: 5),
+      ),
+    );
+  }
+
+  void _initSmsListener() {
+    try {
+      telephony.listenIncomingSms(
+        onNewMessage: (SmsMessage message) { _loadMessages(); },
+        onBackgroundMessage: backgroundHandler
+      );
+    } catch (e) {
+      debugPrint("Listener Error: $e");
+    }
+  }
+
+  // --- 2. LOAD MESSAGES (WITH TIMEOUT) ---
+  Future<void> _loadMessages() async {
+    if (!mounted) return;
+    setState(() => isLoading = true);
+
+    try {
+      // TIMEOUT FIX: If getInboxSms takes > 10s, throw error so app doesn't freeze
+      List<SmsMessage> rawMessages = await telephony.getInboxSms(
+        columns: [SmsColumn.ADDRESS, SmsColumn.BODY, SmsColumn.DATE],
+        sortOrder: [OrderBy(SmsColumn.DATE, sort: Sort.DESC)],
+      ).timeout(const Duration(seconds: 10), onTimeout: () {
+        debugPrint("⚠️ SMS Load Timeout");
+        return [];
+      });
+
+      List<RescueMessage> tempSos = [];
+      List<RescueMessage> tempOther = [];
+      List<String> prefixes = ['sos', 'cuu', 'help'];
+      int otherCount = 0;
+
+      for (var sms in rawMessages) {
+        String body = (sms.body ?? "").toLowerCase();
+        bool isSos = prefixes.any((prefix) => body.startsWith(prefix));
+        
+        ExtractedInfo cachedInfo = ExtractedInfo();
+        if (isSos) {
+          final dbResult = await DatabaseHelper.instance.getCachedAnalysis(
+            sms.address ?? "Unknown", 
+            sms.date ?? 0
+          );
+          if (dbResult != null) cachedInfo = dbResult;
+        }
+
+        var msgObj = RescueMessage(originalMessage: sms, info: cachedInfo, isSos: isSos);
+
+        if (isSos) {
+          tempSos.add(msgObj);
+        } else if (otherCount < 50) { 
+          tempOther.add(msgObj); 
+          otherCount++; 
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          sosMessages = tempSos;
+          otherMessages = tempOther;
+          isLoading = false; // SUCCESS
+        });
+        
+        // Trigger Queue
+        for (var msg in sosMessages) {
+          if (!msg.info.isAnalyzed) _addToAnalysisQueue(msg);
+        }
+      }
+
+    } catch (e) {
+      debugPrint("❌ Error loading messages: $e");
+      if (mounted) {
+        setState(() => isLoading = false); // FAILURE SAFETY
+      }
+    }
+  }
+
+  // --- 3. QUEUE SYSTEM ---
   void _addToAnalysisQueue(RescueMessage msg) {
     if (!msg.isSos || msg.info.isAnalyzed || msg.isAnalyzing) return;
     if (!_processingQueue.contains(msg)) {
@@ -90,7 +197,6 @@ class _HomeScreenState extends State<HomeScreen> {
       _processingQueue.removeAt(0);
       if (mounted) setState(() { msg.info = result; msg.isAnalyzing = false; });
 
-      // Auto Send Check
       bool autoSendEnabled = await PrefsHelper.getAutoSend();
       if (autoSendEnabled && result.isAnalyzed && !msg.apiSent) {
         await _performSend(msg);
@@ -101,47 +207,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _isProcessorRunning = false;
   }
 
-  // --- LOAD ---
-  Future<void> _loadMessages() async {
-    if (!mounted) return;
-    setState(() => isLoading = true);
-
-    await [Permission.sms, Permission.location].request();
-
-    List<SmsMessage> rawMessages = await telephony.getInboxSms(
-      columns: [SmsColumn.ADDRESS, SmsColumn.BODY, SmsColumn.DATE],
-      sortOrder: [OrderBy(SmsColumn.DATE, sort: Sort.DESC)],
-    );
-
-    List<RescueMessage> tempSos = [];
-    List<RescueMessage> tempOther = [];
-    List<String> prefixes = ['sos', 'cuu', 'help'];
-    int otherCount = 0;
-
-    for (var sms in rawMessages) {
-      String body = (sms.body ?? "").toLowerCase();
-      bool isSos = prefixes.any((prefix) => body.startsWith(prefix));
-      
-      ExtractedInfo cachedInfo = ExtractedInfo();
-      if (isSos) {
-        final dbResult = await DatabaseHelper.instance.getCachedAnalysis(sms.address ?? "Unknown", sms.date ?? 0);
-        if (dbResult != null) cachedInfo = dbResult;
-      }
-
-      var msgObj = RescueMessage(originalMessage: sms, info: cachedInfo, isSos: isSos);
-
-      if (isSos) tempSos.add(msgObj);
-      else if (otherCount < 50) { tempOther.add(msgObj); otherCount++; }
-    }
-
-    if (mounted) {
-      setState(() { sosMessages = tempSos; otherMessages = tempOther; isLoading = false; });
-      for (var msg in sosMessages) {
-        if (!msg.info.isAnalyzed) _addToAnalysisQueue(msg);
-      }
-    }
-  }
-
+  // --- 4. ACTION LOGIC ---
   void _moveMessage(RescueMessage message, bool targetIsSos) {
     setState(() {
       message.isSos = targetIsSos;
@@ -156,7 +222,6 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // --- SENDING ---
   Future<void> _performSend(RescueMessage msg) async {
     Position? pos;
     try { pos = await Geolocator.getCurrentPosition(); } catch (_) {}
@@ -171,14 +236,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _handleManualSend(RescueMessage msg) async {
-    // 1. Show Edit Dialog
     ExtractedInfo? editedInfo = await _showEditDialog(context, msg);
     if (editedInfo == null) return; 
 
-    // 2. Update Local State
     setState(() => msg.info = editedInfo);
     
-    // 3. Send
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Sending...")));
     await _performSend(msg);
   }
@@ -241,6 +303,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // --- 5. UI BUILD ---
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -248,7 +311,10 @@ class _HomeScreenState extends State<HomeScreen> {
         index: _currentIndex,
         children: [
           const WebViewTab(),
-          SmsTab(sosList: sosMessages, otherList: otherMessages, isLoading: isLoading, onMove: _moveMessage, onManualSend: _handleManualSend),
+          // Passing a manual refresh button to SmsTab in case lists are empty
+          sosMessages.isEmpty && otherMessages.isEmpty && !isLoading
+            ? Center(child: ElevatedButton(onPressed: _loadMessages, child: const Text("Retry Load SMS")))
+            : SmsTab(sosList: sosMessages, otherList: otherMessages, isLoading: isLoading, onMove: _moveMessage, onManualSend: _handleManualSend),
           const ConfigTab(),
         ],
       ),
