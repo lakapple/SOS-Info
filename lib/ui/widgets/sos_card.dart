@@ -59,15 +59,15 @@ class SosCard extends StatelessWidget {
                 ],
 
                 // RAW MESSAGE (ALWAYS VISIBLE)
-                const Text("Original Message:", style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
+                const Text("Full Message:", style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 4),
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    // color: Colors.white,
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.black12),
+                    // border: Border.all(color: Colors.black12),
                   ),
                   child: Text(
                     message.originalMessage.body ?? "", 
