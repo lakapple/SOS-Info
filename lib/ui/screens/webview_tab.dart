@@ -14,18 +14,39 @@ class WebViewTab extends ConsumerStatefulWidget {
 class _WebViewTabState extends ConsumerState<WebViewTab> {
   late final WebViewController controller;
   Timer? _timer;
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
+    
+    // 1. Initialize Controller
     controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setNavigationDelegate(NavigationDelegate(
+        onPageStarted: (_) => setState(() => _isLoading = true),
+        onPageFinished: (_) => setState(() => _isLoading = false),
+      ))
       ..loadRequest(Uri.parse(AppConstants.webViewUrl));
+
+    // 2. Initialize Timer based on current setting (using read, not watch)
+    final initialInterval = ref.read(settingsProvider).refreshInterval;
+    _updateTimer(initialInterval);
   }
 
-  void _setupTimer(int interval) {
-    _timer?.cancel();
-    _timer = Timer.periodic(Duration(seconds: interval), (t) => controller.reload());
+  // Logic to Start/Stop Timer
+  void _updateTimer(int seconds) {
+    _timer?.cancel(); // Always cancel old timer first
+
+    if (seconds > 0) {
+      debugPrint("🔄 WebView Timer started: Every $seconds seconds");
+      _timer = Timer.periodic(Duration(seconds: seconds), (t) {
+        debugPrint("🔄 Auto-refreshing WebView...");
+        controller.reload();
+      });
+    } else {
+      debugPrint("🛑 WebView Auto-refresh Disabled");
+    }
   }
 
   @override
@@ -36,16 +57,41 @@ class _WebViewTabState extends ConsumerState<WebViewTab> {
 
   @override
   Widget build(BuildContext context) {
-    // Watch settings to auto-update timer if interval changes
-    final interval = ref.watch(settingsProvider.select((s) => s.refreshInterval));
-    
-    // We start/restart timer inside build side-effect or listener, 
-    // but doing it here is a simple way to react to state changes.
-    // Ideally use ref.listen, but simple check works for this scale.
-    if (_timer == null || _timer!.tick > 0) { // lazy check
-        _setupTimer(interval); 
-    }
+    // 3. LISTEN to Settings Changes
+    // This is the correct way to react to provider changes for logic (not UI)
+    ref.listen(settingsProvider.select((s) => s.refreshInterval), (previous, next) {
+      if (previous != next) {
+        _updateTimer(next);
+      }
+    });
 
-    return SafeArea(child: WebViewWidget(controller: controller));
+    return Scaffold(
+      // The WebView
+      body: Stack(
+        children: [
+          SafeArea(child: WebViewWidget(controller: controller)),
+          if (_isLoading)
+            const LinearProgressIndicator(minHeight: 2, color: Colors.blue),
+        ],
+      ),
+      
+      // Manual Refresh Button
+      floatingActionButton: FloatingActionButton(
+        mini: true,
+        backgroundColor: Colors.white.withOpacity(0.9),
+        foregroundColor: Colors.blue,
+        onPressed: () {
+          controller.reload();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Refreshing Map..."), 
+              duration: Duration(seconds: 1),
+            )
+          );
+        },
+        child: const Icon(Icons.refresh),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+    );
   }
 }

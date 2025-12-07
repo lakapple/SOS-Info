@@ -16,17 +16,13 @@ class _ConfigTabState extends ConsumerState<ConfigTab> {
   @override
   void initState() {
     super.initState();
-    // Pre-fill controller with current state
     final settings = ref.read(settingsProvider);
     _apiKeyController.text = settings.apiKey;
   }
 
   Future<void> _handleSave() async {
-    // Save all via Provider
     final notifier = ref.read(settingsProvider.notifier);
     await notifier.updateApiKey(_apiKeyController.text.trim());
-    // Auto-send and interval are already updated via their specific widgets below (onChanged)
-    // But for API key in text field, we explicitly save here.
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -34,18 +30,14 @@ class _ConfigTabState extends ConsumerState<ConfigTab> {
       );
     }
 
-    // Trigger AI Logic in Rescue Provider
     final count = ref.read(rescueProvider.notifier).triggerPendingAnalysis();
     if (count > 0 && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Queueing $count messages...")),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Queueing $count messages...")));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Watch settings state
     final settings = ref.watch(settingsProvider);
 
     if (settings.isLoading) return const Center(child: CircularProgressIndicator());
@@ -81,9 +73,11 @@ class _ConfigTabState extends ConsumerState<ConfigTab> {
                 value: settings.refreshInterval,
                 underline: Container(),
                 items: const [
-                  DropdownMenuItem(value: 10, child: Text("10s")),
-                  DropdownMenuItem(value: 30, child: Text("30s")),
-                  DropdownMenuItem(value: 60, child: Text("60s")),
+                  // NEW OPTION: 0 means OFF
+                  DropdownMenuItem(value: 0, child: Text("Off (Manual Only)")),
+                  DropdownMenuItem(value: 10, child: Text("10 Seconds")),
+                  DropdownMenuItem(value: 30, child: Text("30 Seconds")),
+                  DropdownMenuItem(value: 60, child: Text("60 Seconds")),
                 ],
                 onChanged: (val) {
                   if (val != null) {
