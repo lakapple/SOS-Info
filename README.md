@@ -5,8 +5,8 @@
 Ứng dụng tập trung vào khả năng hoạt động trong điều kiện khẩn cấp, tích hợp AI để xử lý tin nhắn SOS tự động và định vị chính xác.
 
 <p align="center">
-   <img src="/assets/images/webview_tab.jpg" width=30%>
-   <img src="/assets/images/sms_tab.jpg" width=30%>
+   <img src="/assets/images/webview_tab.jpg" width=40%>
+   <img src="/assets/images/sms_tab.jpg" width=40%>
 </p>
 
 ## 📱 Tính năng nổi bật
