@@ -12,7 +12,7 @@ class ConfigTab extends ConsumerStatefulWidget {
 class _ConfigTabState extends ConsumerState<ConfigTab> {
   final _apiKeyCtrl = TextEditingController();
   bool _autoSend = false;
-  int _refresh = 30;
+  int _refresh = 0;
 
   @override
   void initState() {

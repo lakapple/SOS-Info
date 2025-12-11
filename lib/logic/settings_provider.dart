@@ -5,7 +5,7 @@ class SettingsState {
   final bool autoSend;
   final String apiKey;
   final int refreshInterval;
-  SettingsState({this.autoSend = false, this.apiKey = '', this.refreshInterval = 30});
+  SettingsState({this.autoSend = false, this.apiKey = '', this.refreshInterval = 0});
 }
 
 class SettingsNotifier extends StateNotifier<SettingsState> {
