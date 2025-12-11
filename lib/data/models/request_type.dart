@@ -1,10 +1,5 @@
 enum RequestType {
-  URGENT_HOSPITAL, 
-  SAFE_PLACE, 
-  SUPPLIES, 
-  MEDICAL, 
-  CLOTHES, 
-  CUSTOM
+  URGENT_HOSPITAL, SAFE_PLACE, SUPPLIES, MEDICAL, CLOTHES, CUSTOM
 }
 
 extension RequestTypeExt on RequestType {

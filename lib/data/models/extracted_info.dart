@@ -2,19 +2,19 @@ import 'dart:convert';
 import 'request_type.dart';
 
 class ExtractedInfo {
-  List<String> phoneNumbers;
-  String content; 
-  int peopleCount;
-  String address;
-  RequestType requestType;
-  bool isAnalyzed;
-  bool needsRetry;
+  final List<String> phoneNumbers;
+  final String content;
+  final int peopleCount;
+  final String address;
+  final RequestType requestType;
+  final bool isAnalyzed;
+  final bool needsRetry;
 
   ExtractedInfo({
     this.phoneNumbers = const [],
-    this.content = "", // DEFAULT BLANK
+    this.content = "",
     this.peopleCount = 0,
-    this.address = "", // DEFAULT BLANK
+    this.address = "",
     this.requestType = RequestType.CUSTOM,
     this.isAnalyzed = false,
     this.needsRetry = false,

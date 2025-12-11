@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../data/providers/rescue_provider.dart';
-import 'webview_tab.dart';
-import 'sms_tab.dart';
-import 'config_tab.dart';
+import '../../logic/sms_provider.dart';
+import 'screens/webview_tab.dart';
+import 'screens/sms_tab.dart';
+import 'screens/config_tab.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -12,34 +12,30 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  int _currentIndex = 0;
+  int _idx = 0;
 
   @override
   void initState() {
     super.initState();
-    // Init Logic moved to Provider
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(rescueProvider.notifier).initPermissionsAndListeners();
+      ref.read(smsProvider.notifier).init();
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: const [
-          WebViewTab(),
-          SmsTab(),
-          ConfigTab(),
-        ],
-      ),
+      body: IndexedStack(index: _idx, children: [
+        WebViewTab(isVisible: _idx == 0),
+        const SmsTab(),
+        const ConfigTab(),
+      ]),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (index) => setState(() => _currentIndex = index),
+        selectedIndex: _idx,
+        onDestinationSelected: (i) => setState(() => _idx = i),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.public), label: "Map"),
-          NavigationDestination(icon: Icon(Icons.mark_chat_unread), label: "Inbox"),
+          NavigationDestination(icon: Icon(Icons.sms), label: "Inbox"),
           NavigationDestination(icon: Icon(Icons.settings), label: "Config"),
         ],
       ),
