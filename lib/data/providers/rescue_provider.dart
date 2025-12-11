@@ -13,9 +13,7 @@ import '../models/rescue_message.dart';
 import '../models/extracted_info.dart';
 import 'settings_provider.dart';
 
-// ---------------------------------------------------------
-// STATE CLASS
-// ---------------------------------------------------------
+// State Class (Unchanged)
 class RescueState {
   final List<RescueMessage> sosMessages;
   final List<RescueMessage> otherMessages;
@@ -44,44 +42,27 @@ class RescueState {
   }
 }
 
-// ---------------------------------------------------------
-// NOTIFIER (LOGIC)
-// ---------------------------------------------------------
+// Notifier
 class RescueNotifier extends StateNotifier<RescueState> {
   final Ref ref;
   final Telephony telephony = Telephony.instance;
   final List<RescueMessage> _processingQueue = [];
-  Timer? _pollingTimer; // NEW: Backup Timer
+  Timer? _pollingTimer;
 
   RescueNotifier(this.ref) : super(RescueState()) {
-    // Clean up timer when provider is destroyed
-    ref.onDispose(() {
-      _pollingTimer?.cancel();
-    });
+    ref.onDispose(() => _pollingTimer?.cancel());
   }
 
   @pragma('vm:entry-point')
   static void backgroundHandler(SmsMessage message) {}
 
-  // 1. INITIALIZE
   Future<void> initPermissionsAndListeners() async {
     state = state.copyWith(isLoading: true);
+    await [Permission.sms, Permission.location].request();
     
-    Map<Permission, PermissionStatus> statuses = await [
-      Permission.sms,
-      Permission.location,
-    ].request();
-
-    if (statuses[Permission.sms] != PermissionStatus.granted) {
-      state = state.copyWith(isLoading: false);
-      return;
-    }
-
-    // A. SETUP REAL-TIME LISTENER
     try {
       telephony.listenIncomingSms(
         onNewMessage: (SmsMessage message) { 
-          debugPrint("⚡ Real-time SMS: ${message.body}");
           _handleIncomingSms(message);
         },
         onBackgroundMessage: backgroundHandler
@@ -90,27 +71,18 @@ class RescueNotifier extends StateNotifier<RescueState> {
       debugPrint("Listener Error: $e");
     }
 
-    // B. INITIAL LOAD
     await _loadMessages();
-
-    // C. START POLLING (BACKUP MECHANISM)
-    // Checks DB every 15 seconds in case Listener fails
-    _pollingTimer?.cancel();
-    _pollingTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
-      _loadMessages(silent: true);
-    });
+    
+    _pollingTimer = Timer.periodic(const Duration(seconds: 15), (t) => _loadMessages(silent: true));
   }
 
-  // 2. HANDLE NEW SMS (INSTANT MEMORY INSERT)
   void _handleIncomingSms(SmsMessage message) {
     final body = (message.body ?? "").toLowerCase();
     final rawAddress = message.address ?? "Unknown";
     final cleanSender = AppUtils.formatPhoneNumber(rawAddress);
     
-    // Check duplicates before inserting (Important for Polling + Listener mix)
     bool exists = state.sosMessages.any((m) => m.originalMessage.date == message.date) || 
                   state.otherMessages.any((m) => m.originalMessage.date == message.date);
-    
     if (exists) return;
 
     List<String> prefixes = ['sos', 'cuu', 'help'];
@@ -131,7 +103,7 @@ class RescueNotifier extends StateNotifier<RescueState> {
     }
   }
 
-  // 3. LOAD MESSAGES FROM DB
+  // --- LOAD MESSAGES (UPDATED) ---
   Future<void> _loadMessages({bool silent = false}) async {
     try {
       if (!silent) state = state.copyWith(isLoading: true);
@@ -149,14 +121,25 @@ class RescueNotifier extends StateNotifier<RescueState> {
       for (var sms in rawMessages) {
         String body = (sms.body ?? "").toLowerCase();
         String rawAddress = sms.address ?? "Unknown";
-        String cleanSender = AppUtils.formatPhoneNumber(rawAddress); 
+        String cleanSender = AppUtils.formatPhoneNumber(rawAddress);
+        
+        // 1. Determine Default Status based on Prefix
         bool isSos = prefixes.any((prefix) => body.startsWith(prefix));
         
-        // Optimize: Only check DB Cache if we don't have this message in memory OR it's a full reload
+        // 2. Check Database for Override & Info
         ExtractedInfo cachedInfo = ExtractedInfo();
-        if (isSos) {
-          final dbResult = await DatabaseHelper.instance.getCachedAnalysis(cleanSender, sms.date ?? 0);
-          if (dbResult != null) cachedInfo = dbResult;
+        
+        final dbData = await DatabaseHelper.instance.getCachedData(cleanSender, sms.date ?? 0);
+        
+        if (dbData != null) {
+          // Recover ExtractedInfo
+          cachedInfo = ExtractedInfo.fromJson(dbData);
+          
+          // RECOVER SOS STATUS (The Fix)
+          // If 'is_sos' column exists and is not null, respect it.
+          if (dbData['is_sos'] != null) {
+            isSos = dbData['is_sos'] == 1;
+          }
         }
 
         var msgObj = RescueMessage(
@@ -174,33 +157,26 @@ class RescueNotifier extends StateNotifier<RescueState> {
         }
       }
 
-      // If silent reload (polling), only update if count changed or to refresh data
       state = state.copyWith(
         sosMessages: tempSos,
         otherMessages: tempOther,
         isLoading: false
       );
 
-      // Auto-analyze found SOS messages
       for (var msg in tempSos) {
         if (!msg.info.isAnalyzed) addToAnalysisQueue(msg);
       }
 
     } catch (e) {
-      debugPrint("Error loading: $e");
       if (!silent) state = state.copyWith(isLoading: false);
     }
   }
 
-  // 4. QUEUE LOGIC
   void addToAnalysisQueue(RescueMessage msg) {
     if (!msg.isSos || msg.info.isAnalyzed || msg.isAnalyzing) return;
-    
-    // Check duplication in queue
     bool alreadyQueued = _processingQueue.any((m) => 
         m.originalMessage.date == msg.originalMessage.date && m.sender == msg.sender
     );
-
     if (!alreadyQueued) {
       _processingQueue.add(msg);
       _runQueueProcessor();
@@ -214,15 +190,10 @@ class RescueNotifier extends StateNotifier<RescueState> {
     while (_processingQueue.isNotEmpty) {
       final msg = _processingQueue.first;
       
-      // Update UI state
       msg.isAnalyzing = true; 
       state = state.copyWith(); 
 
-      // 1. AI Extract
-      final result = await GeminiService.extractData(
-        msg.originalMessage.body ?? "", 
-        msg.sender 
-      );
+      final result = await GeminiService.extractData(msg.originalMessage.body ?? "", msg.sender);
 
       if (result.needsRetry) {
         await Future.delayed(const Duration(seconds: 20));
@@ -230,20 +201,20 @@ class RescueNotifier extends StateNotifier<RescueState> {
       }
 
       if (result.isAnalyzed) {
-         await DatabaseHelper.instance.cacheAnalysis(
+         // SAVE: Info + Status (true because it's in queue means it is SOS)
+         await DatabaseHelper.instance.saveMessageState(
            msg.sender, 
-           msg.originalMessage.date ?? DateTime.now().millisecondsSinceEpoch, 
-           result
+           msg.originalMessage.date ?? 0, 
+           result,
+           true // isSos
          );
       }
 
       _processingQueue.removeAt(0);
-      
       msg.info = result;
       msg.isAnalyzing = false;
-      state = state.copyWith(); // Refresh UI
+      state = state.copyWith(); 
 
-      // 2. Auto Send Check
       final settings = ref.read(settingsProvider);
       if (settings.autoSend && result.isAnalyzed && !msg.apiSent) {
         await performSend(msg);
@@ -255,7 +226,6 @@ class RescueNotifier extends StateNotifier<RescueState> {
     state = state.copyWith(isQueueRunning: false);
   }
 
-  // 5. MANUAL ACTIONS
   int triggerPendingAnalysis() {
     int count = 0;
     for (var msg in state.sosMessages) {
@@ -267,7 +237,8 @@ class RescueNotifier extends StateNotifier<RescueState> {
     return count;
   }
 
-  void moveMessage(RescueMessage message, bool targetIsSos) {
+  // --- MANUAL ACTIONS (UPDATED) ---
+  void moveMessage(RescueMessage message, bool targetIsSos) async {
     List<RescueMessage> newSos = List.from(state.sosMessages);
     List<RescueMessage> newOther = List.from(state.otherMessages);
 
@@ -283,6 +254,14 @@ class RescueNotifier extends StateNotifier<RescueState> {
     }
 
     state = state.copyWith(sosMessages: newSos, otherMessages: newOther);
+
+    // FIX: PERSIST THE MOVE TO DATABASE IMMEDIATELY
+    await DatabaseHelper.instance.saveMessageState(
+      message.sender, 
+      message.originalMessage.date ?? 0, 
+      message.info, // Save existing info (even if empty)
+      targetIsSos   // Save the new status
+    );
   }
 
   Future<bool> performSend(RescueMessage msg) async {
@@ -300,18 +279,16 @@ class RescueNotifier extends StateNotifier<RescueState> {
 
   void updateMessageInfo(RescueMessage msg, ExtractedInfo newInfo) async {
     msg.info = newInfo;
-    await DatabaseHelper.instance.cacheAnalysis(
+    await DatabaseHelper.instance.saveMessageState(
        msg.sender, 
-       msg.originalMessage.date ?? DateTime.now().millisecondsSinceEpoch, 
-       newInfo
+       msg.originalMessage.date ?? 0, 
+       newInfo,
+       msg.isSos // Keep current status
     );
     state = state.copyWith(); 
   }
 }
 
-// ---------------------------------------------------------
-// PROVIDER
-// ---------------------------------------------------------
 final rescueProvider = StateNotifierProvider<RescueNotifier, RescueState>((ref) {
   return RescueNotifier(ref);
 });
