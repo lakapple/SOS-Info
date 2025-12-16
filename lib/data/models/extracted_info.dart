@@ -6,15 +6,21 @@ class ExtractedInfo {
   final String content;
   final int peopleCount;
   final String address;
+  // --- LOCATION FIELDS ---
+  final double lat;
+  final double lng;
+  // -----------------------
   final RequestType requestType;
   final bool isAnalyzed;
-  final bool needsRetry;
+  final bool needsRetry; // RESTORED THIS FIELD
 
   ExtractedInfo({
     this.phoneNumbers = const [],
     this.content = "",
     this.peopleCount = 0,
     this.address = "",
+    this.lat = 0.0,
+    this.lng = 0.0,
     this.requestType = RequestType.CUSTOM,
     this.isAnalyzed = false,
     this.needsRetry = false,
@@ -26,8 +32,11 @@ class ExtractedInfo {
       'content': content,
       'peopleCount': peopleCount,
       'address': address,
+      'lat': lat,
+      'lng': lng,
       'requestType': requestType.name,
       'isAnalyzed': isAnalyzed ? 1 : 0,
+      // We don't necessarily need to save needsRetry to DB as it's transient
     };
   }
 
@@ -42,6 +51,8 @@ class ExtractedInfo {
       content: map['content'] ?? "",
       peopleCount: map['peopleCount'] ?? 0,
       address: map['address'] ?? "",
+      lat: map['lat'] ?? 0.0,
+      lng: map['lng'] ?? 0.0,
       requestType: type,
       isAnalyzed: map['isAnalyzed'] == 1,
       needsRetry: false,

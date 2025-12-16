@@ -37,14 +37,12 @@ class SmsNotifier extends StateNotifier<SmsState> {
   static void bgHandler(SmsMessage m) {}
 
   Future<void> init() async {
-    // Permission Check
     final status = await [Permission.sms, Permission.location].request();
     if (status[Permission.sms] != PermissionStatus.granted) {
       state = SmsState(isLoading: false);
       return;
     }
 
-    // Listener
     _telephony.listenIncomingSms(
       onNewMessage: (m) => _handleIncoming(m),
       onBackgroundMessage: bgHandler
@@ -52,11 +50,9 @@ class SmsNotifier extends StateNotifier<SmsState> {
 
     await _loadFromDevice();
     
-    // Polling Backup (every 15s)
     _pollingTimer = Timer.periodic(const Duration(seconds: 15), (_) => _loadFromDevice(silent: true));
   }
 
-  // --- CORE: Load Messages ---
   Future<void> _loadFromDevice({bool silent = false}) async {
     if (!silent) state = SmsState(sosList: state.sosList, otherList: state.otherList, isLoading: true);
 
@@ -70,13 +66,11 @@ class SmsNotifier extends StateNotifier<SmsState> {
       final other = <RescueMessage>[];
       final prefixes = ['sos', 'cuu', 'help'];
 
-      // Optimize: Take 100
       for (var sms in rawMessages.take(AppConstants.smsLoadLimit)) {
         final body = (sms.body ?? "").toLowerCase();
         final phone = AppUtils.formatPhoneNumber(sms.address ?? "Unknown");
         final date = sms.date ?? 0;
 
-        // DB Check for Override
         final record = await DatabaseHelper.instance.getRecord(phone, date);
         
         bool isSos = prefixes.any((p) => body.startsWith(p));
@@ -92,6 +86,8 @@ class SmsNotifier extends StateNotifier<SmsState> {
           sender: phone,
           info: info,
           isSos: isSos,
+          // If we loaded it from DB and it's analyzed, treat it as safe
+          hasManualOverride: info.isAnalyzed, 
         );
 
         if (isSos) sos.add(msg); else other.add(msg);
@@ -99,7 +95,6 @@ class SmsNotifier extends StateNotifier<SmsState> {
 
       state = SmsState(sosList: sos, otherList: other, isLoading: false);
       
-      // Auto-Queue
       for (var m in sos) {
         if (!m.info.isAnalyzed) _addToQueue(m);
       }
@@ -109,12 +104,10 @@ class SmsNotifier extends StateNotifier<SmsState> {
     }
   }
 
-  // --- CORE: Incoming SMS ---
   void _handleIncoming(SmsMessage m) {
     final phone = AppUtils.formatPhoneNumber(m.address ?? "Unknown");
     final body = (m.body ?? "").toLowerCase();
     
-    // Dupe Check
     final exists = state.sosList.any((x) => x.originalMessage.date == m.date) || 
                    state.otherList.any((x) => x.originalMessage.date == m.date);
     if (exists) return;
@@ -137,10 +130,8 @@ class SmsNotifier extends StateNotifier<SmsState> {
     }
   }
 
-  // --- CORE: Queue ---
   void _addToQueue(RescueMessage msg) {
-    if (!msg.isSos || msg.info.isAnalyzed || msg.isAnalyzing) return;
-    // De-dupe Queue
+    if (!msg.isSos || msg.info.isAnalyzed || msg.isAnalyzing || msg.hasManualOverride) return;
     if (_queue.any((m) => m.originalMessage.date == msg.originalMessage.date)) return;
     
     _queue.add(msg);
@@ -154,7 +145,7 @@ class SmsNotifier extends StateNotifier<SmsState> {
     while (_queue.isNotEmpty) {
       var msg = _queue.first;
       
-      // UI: Analyzing
+      // Update UI: Analyzing
       _updateLocalMessage(msg.copyWith(isAnalyzing: true));
 
       final settings = ref.read(settingsProvider);
@@ -166,25 +157,39 @@ class SmsNotifier extends StateNotifier<SmsState> {
         settings.apiKey
       );
 
-      // Backoff if Rate Limit
+      // --- CRITICAL CHECK: MANUAL OVERRIDE ---
+      // Fetch the latest version of this message from the state
+      // (The user might have edited it while AI was running)
+      final currentInState = state.sosList.firstWhere(
+        (m) => m.originalMessage.date == msg.originalMessage.date,
+        orElse: () => msg
+      );
+
+      if (currentInState.hasManualOverride) {
+        debugPrint("✋ AI result discarded due to manual override");
+        _queue.removeAt(0);
+        // Stop analyzing indicator for the manually edited message
+        _updateLocalMessage(currentInState.copyWith(isAnalyzing: false));
+        continue;
+      }
+      // -------------------------------------
+
       if (result.needsRetry) {
         await Future.delayed(const Duration(seconds: 20));
         continue; 
       }
 
-      // Save to DB
       if (result.isAnalyzed) {
         await DatabaseHelper.instance.saveState(
           msg.sender, msg.originalMessage.date ?? 0, result, msg.isSos
         );
       }
 
-      // Update Msg
+      // Update Msg with AI result
       msg = msg.copyWith(info: result, isAnalyzing: false);
       _updateLocalMessage(msg);
       _queue.removeAt(0);
 
-      // Auto Send
       if (settings.autoSend && result.isAnalyzed && !msg.apiSent) {
         await sendAlert(msg);
       }
@@ -194,20 +199,33 @@ class SmsNotifier extends StateNotifier<SmsState> {
     _isQueueRunning = false;
   }
 
-  // --- HELPERS ---
   void _updateLocalMessage(RescueMessage updated) {
-    // Helper to update a single message in the list without full reload
     if (updated.isSos) {
       final list = state.sosList.map((m) => m.originalMessage.date == updated.originalMessage.date ? updated : m).toList();
       state = SmsState(sosList: list, otherList: state.otherList, isLoading: false);
     }
   }
 
-  // Actions
+  // --- ACTIONS ---
+
+  // When user edits manually
+  Future<void> updateAndSave(RescueMessage msg, ExtractedInfo newInfo) async {
+    // 1. Create updated message with Override Flag = TRUE
+    final updated = msg.copyWith(
+      info: newInfo, 
+      isAnalyzing: false, 
+      hasManualOverride: true // <--- LOCK IT
+    );
+
+    // 2. Save to DB
+    await DatabaseHelper.instance.saveState(msg.sender, msg.originalMessage.date ?? 0, newInfo, msg.isSos);
+    
+    // 3. Update UI immediately
+    _updateLocalMessage(updated);
+  }
+
   Future<void> moveMessage(RescueMessage msg, bool toSos) async {
-    final updated = msg.copyWith(isSos: toSos);
     await DatabaseHelper.instance.saveState(msg.sender, msg.originalMessage.date ?? 0, msg.info, toSos);
-    // Reload lists to reflect change
     _loadFromDevice(silent: true);
   }
 
@@ -222,18 +240,14 @@ class SmsNotifier extends StateNotifier<SmsState> {
     return success;
   }
 
-  // Called manually after editing form
-  Future<void> updateAndSave(RescueMessage msg, ExtractedInfo newInfo) async {
-    final updated = msg.copyWith(info: newInfo);
-    await DatabaseHelper.instance.saveState(msg.sender, msg.originalMessage.date ?? 0, newInfo, msg.isSos);
-    _updateLocalMessage(updated);
-  }
-
-  // Called from Config Tab
   int retryFailed() {
     int c = 0;
     for (var m in state.sosList) {
-      if (!m.info.isAnalyzed) { _addToQueue(m); c++; }
+      // Retry if not analyzed AND not manually overridden
+      if (!m.info.isAnalyzed && !m.hasManualOverride) { 
+        _addToQueue(m); 
+        c++; 
+      }
     }
     return c;
   }

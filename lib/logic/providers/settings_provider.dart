@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../data/local/prefs_helper.dart';
+import '../../data/local/prefs_helper.dart';
 
 class SettingsState {
   final bool autoSend;

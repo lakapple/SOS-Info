@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../logic/sms_provider.dart';
+import '../logic/providers/sms_provider.dart';
 import 'screens/webview_tab.dart';
 import 'screens/sms_tab.dart';
 import 'screens/config_tab.dart';

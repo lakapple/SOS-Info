@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../../core/constants.dart';
-import '../../logic/settings_provider.dart';
+import '../../logic/providers/settings_provider.dart';
 
 class WebViewTab extends ConsumerStatefulWidget {
   final bool isVisible;

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../logic/settings_provider.dart';
-import '../../logic/sms_provider.dart';
+import '../../logic/providers/settings_provider.dart';
+import '../../logic/providers/sms_provider.dart';
 
 class ConfigTab extends ConsumerStatefulWidget {
   const ConfigTab({super.key});

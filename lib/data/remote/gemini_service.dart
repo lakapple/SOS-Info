@@ -21,8 +21,14 @@ class GeminiService {
       final prompt = Content.text('''
         Bạn là hệ thống AI cứu hộ khẩn cấp. Input: Sender: $phone, Message: "$text".
         Nhiệm vụ: Trích xuất thông tin cứu hộ.
-        Output JSON: { "phone_numbers": [], "content": "nội dung cần giúp cụ thể (không chào hỏi)", "people_count": 1, "address": "địa chỉ", "request_type": "CUSTOM" }
-        Types: URGENT_HOSPITAL, SAFE_PLACE, SUPPLIES, MEDICAL, CLOTHES, CUSTOM.
+        Yêu cầu Output JSON:
+        1. "phone_numbers": Danh sách số điện thoại liên hệ.
+        2. "content": Trích xuất NỘI DUNG CẦN GIÚP ĐỠ cụ thể.
+        3. "people_count": Số lượng người (Int).
+        4. "address": Địa chỉ cụ thể.
+        5. "request_type": Phân loại (URGENT_HOSPITAL, SAFE_PLACE, SUPPLIES, MEDICAL, CLOTHES, CUSTOM).
+        
+        Trả về JSON duy nhất: { "phone_numbers": [], "content": "", "people_count": 1, "address": "", "request_type": "CUSTOM" }
       ''');
 
       final response = await model.generateContent([prompt]);
@@ -39,6 +45,8 @@ class GeminiService {
         content: map['content'] ?? "",
         peopleCount: int.tryParse(map['people_count'].toString()) ?? 1,
         address: map['address'] ?? "",
+        lat: 0.0, // AI doesn't get coords, user adds them via Map Picker
+        lng: 0.0,
         requestType: type,
         isAnalyzed: true,
       );
