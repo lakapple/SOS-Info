@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../logic/providers/sms_provider.dart';
+import '../../logic/providers/sms_provider.dart';
 import 'screens/webview_tab.dart';
 import 'screens/sms_tab.dart';
+import 'screens/template_tab.dart';
 import 'screens/config_tab.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -28,14 +29,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       body: IndexedStack(index: _idx, children: [
         WebViewTab(isVisible: _idx == 0),
         const SmsTab(),
+        const TemplateTab(),
         const ConfigTab(),
       ]),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _idx,
         onDestinationSelected: (i) => setState(() => _idx = i),
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.public), label: "Map"),
+          NavigationDestination(icon: Icon(Icons.map), label: "Map"),
           NavigationDestination(icon: Icon(Icons.sms), label: "Inbox"),
+          NavigationDestination(icon: Icon(Icons.note_add), label: "Template"),
           NavigationDestination(icon: Icon(Icons.settings), label: "Config"),
         ],
       ),

@@ -5,26 +5,18 @@ import '../models/extracted_info.dart';
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
-
   DatabaseHelper._init();
 
   Future<Database> get database async {
     if (_database != null) return _database!;
-    // Bumped version to 2 to trigger onUpgrade
-    _database = await _initDB('rescue_v3.db'); 
+    _database = await _initDB('rescue_v3.db');
     return _database!;
   }
 
   Future<Database> _initDB(String filePath) async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
-    
-    return await openDatabase(
-      path, 
-      version: 2, // INCREASED VERSION
-      onCreate: _createDB,
-      onUpgrade: _onUpgrade, // HANDLE MIGRATION
-    );
+    return await openDatabase(path, version: 2, onCreate: _createDB, onUpgrade: _onUpgrade);
   }
 
   Future _createDB(Database db, int version) async {
@@ -36,20 +28,18 @@ class DatabaseHelper {
         content TEXT,
         peopleCount INTEGER,
         address TEXT,
+        lat REAL,
+        lng REAL,
         requestType TEXT,
         isAnalyzed INTEGER,
         is_sos INTEGER,
-        lat REAL, 
-        lng REAL,
         PRIMARY KEY (sms_address, sms_date)
       )
     ''');
   }
 
-  // --- FIX: ADD MISSING COLUMNS AUTOMATICALLY ---
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
-      // Add lat/lng columns if coming from version 1
       await db.execute('ALTER TABLE analysis ADD COLUMN lat REAL');
       await db.execute('ALTER TABLE analysis ADD COLUMN lng REAL');
     }
@@ -61,8 +51,6 @@ class DatabaseHelper {
     data['sms_address'] = addr;
     data['sms_date'] = date;
     data['is_sos'] = isSos ? 1 : 0;
-    
-    // Use insert with replace to handle both insert and update
     await db.insert('analysis', data, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 

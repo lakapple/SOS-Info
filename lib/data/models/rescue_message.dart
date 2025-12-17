@@ -8,8 +8,7 @@ class RescueMessage {
   final bool isSos;
   final bool apiSent;
   final bool isAnalyzing;
-  // NEW: Track if user manually edited this
-  final bool hasManualOverride; 
+  final bool hasManualOverride;
 
   RescueMessage({
     required this.originalMessage,
@@ -18,7 +17,7 @@ class RescueMessage {
     required this.isSos,
     this.apiSent = false,
     this.isAnalyzing = false,
-    this.hasManualOverride = false, // Default false
+    this.hasManualOverride = false,
   });
 
   RescueMessage copyWith({

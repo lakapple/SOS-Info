@@ -9,8 +9,6 @@ import '../models/request_type.dart';
 class RescueApiService {
   Future<bool> sendRequest(ExtractedInfo info, Position? currentPos) async {
     try {
-      // Logic: Use the map-picked location (info.lat) if available.
-      // If 0.0, fallback to current GPS (currentPos).
       double finalLat = (info.lat != 0.0) ? info.lat : (currentPos?.latitude ?? 0.0);
       double finalLng = (info.lng != 0.0) ? info.lng : (currentPos?.longitude ?? 0.0);
 

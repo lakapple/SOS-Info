@@ -52,9 +52,7 @@ class _WebViewTabState extends ConsumerState<WebViewTab> {
         SafeArea(child: WebViewWidget(controller: _ctrl)),
         if (_loading) const LinearProgressIndicator(minHeight: 2),
       ]),
-      floatingActionButton: FloatingActionButton(
-        mini: true, onPressed: () => _ctrl.reload(), child: const Icon(Icons.refresh)
-      ),
+      floatingActionButton: FloatingActionButton(mini: true, onPressed: () => _ctrl.reload(), child: const Icon(Icons.refresh)),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }

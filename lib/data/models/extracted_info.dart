@@ -6,13 +6,11 @@ class ExtractedInfo {
   final String content;
   final int peopleCount;
   final String address;
-  // --- LOCATION FIELDS ---
   final double lat;
   final double lng;
-  // -----------------------
   final RequestType requestType;
   final bool isAnalyzed;
-  final bool needsRetry; // RESTORED THIS FIELD
+  final bool needsRetry;
 
   ExtractedInfo({
     this.phoneNumbers = const [],
@@ -36,7 +34,6 @@ class ExtractedInfo {
       'lng': lng,
       'requestType': requestType.name,
       'isAnalyzed': isAnalyzed ? 1 : 0,
-      // We don't necessarily need to save needsRetry to DB as it's transient
     };
   }
 
