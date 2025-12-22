@@ -20,6 +20,7 @@ class GeminiService {
       final prompt = Content.text('''
         Bạn là hệ thống AI cứu hộ khẩn cấp. Input: Sender: $phone, Message: "$text".
         Nhiệm vụ: Trích xuất thông tin cứu hộ.
+        Yêu cầu: Đối với tiếng Việt không dấu, không được phép thêm dấu.
         Output JSON: { "phone_numbers": [], "content": "nội dung cần giúp cụ thể (không chào hỏi)", "people_count": 1, "address": "địa chỉ", "request_type": "CUSTOM" }
         Types: URGENT_HOSPITAL, SAFE_PLACE, SUPPLIES, MEDICAL, CLOTHES, CUSTOM.
       ''');
